@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2020, The Monero Project
+// Copyright (c) 2022, The Monero Project
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without modification, are
@@ -24,36 +24,52 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-#pragma once
 
-#include <atomic>
-#include <boost/optional/optional.hpp>
+#include "framework.test.h"
+
+#include <boost/core/demangle.hpp>
+#include <boost/filesystem/operations.hpp>
 #include <cstdint>
-#include <string>
-
+#include <limits>
+#include "common/util.h" // monero/src/
 #include "db/storage.h"
-#include "rpc/client.h"
 
-namespace lws
+namespace
 {
-  //! Scans all active `db::account`s. Detects if another process changes active list.
-  class scanner
+  boost::filesystem::path get_db_location()
   {
-    static std::atomic<bool> running;
+    return tools::get_default_data_dir() + "light_wallet_server_unit_testing";
+  }
 
-    scanner() = delete;
-
-  public:
-    //! Use `client` to sync blockchain data, and \return client if successful.
-    static expect<rpc::client> sync(db::storage disk, rpc::client client);
-
-    //! Poll daemon until `stop()` is called, using `thread_count` threads.
-    static void run(db::storage disk, rpc::context ctx, std::size_t thread_count, boost::string_ref webhook_ssl_verification);
-
-    //! \return True if `stop()` has never been called.
-    static bool is_running() noexcept { return running; }
-
-    //! Stops all scanner instances globally.
-    static void stop() noexcept { running = false; }
+  struct cleanup_db
+  {
+    ~cleanup_db()
+    {
+      boost::filesystem::remove_all(get_db_location());
+    }
   };
-} // lws
+
+  lws::db::storage get_fresh_db()
+  {
+    const boost::filesystem::path location = get_db_location();
+    boost::filesystem::remove_all(location);
+    boost::filesystem::create_directories(location);
+    return lws::db::storage::open(location.c_str(), 5);
+  }
+}
+
+LWS_CASE("db::storage::*_webhook")
+{
+  cleanup_db on_scope_exit{};
+  SETUP("Fresh database")
+  {
+    lws::db::storage db = get_fresh_db();
+    const lws::db::block_info last_block =
+      MONERO_UNWRAP(MONERO_UNWRAP(db.start_read()).get_last_block());
+
+    SECTION("")
+    {
+    }
+  }
+}
+
