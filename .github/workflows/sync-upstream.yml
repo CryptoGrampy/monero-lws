@@ -3,15 +3,28 @@ name: Sync Upstream
 env:
   UPSTREAM_URL: "https://github.com/vtnerd/monero-lws.git"
   UPSTREAM_BRANCH: "develop"
+  DOWNSTREAM_BRANCH: "develop"
   WORKFLOW_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # This runs every day on 1801 UTC
 on:
   schedule:
-    - cron: '1 18 * * *'
+    - cron: '0 0 * * *'
   # Allows manual workflow run (must in default branch to work)
   workflow_dispatch:
 jobs:
+  getMostRecentCommit:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.getCommit.outputs.commit }}
+    steps:
+      - name: Get Most Recent Commit
+        id: getCommit
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ env.DOWNSTREAM_BRANCH }}
+          token: ${{ env.WORKFLOW_TOKEN }}
+          fetch-depth: 1
   build:
     runs-on: ubuntu-latest
     steps:
@@ -21,3 +34,30 @@ jobs:
           upstream_repo: ${{ env.UPSTREAM_URL }}
           upstream_branch: ${{ env.UPSTREAM_BRANCH }}
           token: ${{ env.WORKFLOW_TOKEN }}
+  redeployIfCommitChanges:
+    needs: [getMostRecentCommit, build]
+    runs-on: ubuntu-latest
+    if: ${{ needs.getMostRecentCommit.outputs.commit != github.event.after }}
+    steps:
+        - name: Set BRANCH
+          run: echo "BRANCH=$(echo ${GITHUB_REF#refs/heads/} | sed 's/\//-/g')" >> $GITHUB_ENV
+
+        - name: Login to Docker Hub
+          run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+        - name: Checkout project
+          uses: actions/checkout@v3.5.0
+
+        - name: Set up QEMU
+          uses: docker/setup-qemu-action@v2.1.0
+
+        - name: Setup Docker buildx action
+          uses: docker/setup-buildx-action@v2.5.0
+
+        - name: Run Docker buildx
+          run: |
+            docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag cryptogrampy/monero-lws:$BRANCH \
+            --tag cryptogrampy/monero-lws:latest \
+            --push .
