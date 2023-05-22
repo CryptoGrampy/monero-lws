@@ -4,6 +4,7 @@ env:
   DOCKER_CLI_EXPERIMENTAL: enabled
   
 on:
+  workflow_dispatch:
   push:
     branches: [ "develop" ]
   pull_request:
