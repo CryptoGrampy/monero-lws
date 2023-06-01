@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Get Most Recent Commit
         id: getCommit
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.5.0
         with:
           ref: ${{ env.DOWNSTREAM_BRANCH }}
           token: ${{ env.WORKFLOW_TOKEN }}
